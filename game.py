@@ -621,6 +621,16 @@ def getControls(player, configObject):
     return keys
 
 
+def readDirectionFromKeys(movementKeys, pressed):
+    """Pure function: given the ordered [up, down, left, right] config tokens
+    and a pygame key-pressed snapshot, return 1/2/3/4 for the first matching
+    direction or 0 if none pressed. Mirrors the original Movement.movePlayer
+    key scan, with the pressed-state injectable for testing."""
+    for i, key in enumerate(movementKeys):
+        if pressed[pygame.key.key_code(key)]:
+            return i + 1
+    return 0
+
 
 ########################################################MAIN PROGRAM####################################################
 def runGame(players, names, mazeString):
