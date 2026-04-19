@@ -165,3 +165,58 @@ class ReliableChannel:
             out = self._timed_out
             self._timed_out = []
         return out
+
+
+def buildSnapshot(tick, seq, game, board, pacman, ghosts,
+                  pelletDelta, lastInputSeq):
+    """Return a STATE packet dict ready to encode + send."""
+    pac_pos = pacman.getPosition()
+    return {
+        "t": PacketType.STATE,
+        "s": seq,
+        "tick": tick,
+        "pacman": {
+            "x": pac_pos.x, "y": pac_pos.y,
+            "dir": pacman.getDirection(),
+            "alive": True,  # Pac-Man respawns on death; `lives` carries mortality.
+        },
+        "ghosts": [
+            {
+                "name": g.getName(),
+                "x": g.getPosition().x, "y": g.getPosition().y,
+                "dir": g.getDirection(),
+                "scared": g.isScared(),
+                "dead": g.isDead(),
+            }
+            for g in ghosts.getGhosts()
+        ],
+        "score": game.getScore(),
+        "lives": game.getLives(),
+        "level": game.getLevel(),
+        "dotsLeft": board.getDotsLeft(),
+        "pelletDelta": list(pelletDelta),
+        "lastInputSeq": dict(lastInputSeq),
+    }
+
+
+def diffPellets(original_count, present_now, present_before):
+    """Return a sorted list of pellet indices that were in `present_before`
+    but are no longer in `present_now` — i.e., eaten since the last snapshot.
+    Indices in [0, original_count)."""
+    eaten = present_before - present_now
+    return sorted(eaten)
+
+
+def applySnapshot(state, snap):
+    """Mutate the client-side render state dict in place.
+
+    `state` is a dict with keys: pacman, ghosts (name->dict), score, lives,
+    level, dotsLeft, pelletsPresent (set of indices)."""
+    state["pacman"] = snap["pacman"]
+    state["ghosts"] = {g["name"]: g for g in snap["ghosts"]}
+    state["score"] = snap["score"]
+    state["lives"] = snap["lives"]
+    state["level"] = snap["level"]
+    state["dotsLeft"] = snap["dotsLeft"]
+    for idx in snap.get("pelletDelta", []):
+        state["pelletsPresent"].discard(idx)
