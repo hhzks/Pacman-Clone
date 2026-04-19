@@ -42,3 +42,24 @@ def test_packet_type_constants_are_strings():
 
 def test_proto_version_is_int():
     assert isinstance(PROTO_VERSION, int)
+
+
+from netcommon import seq_next, seq_newer
+
+
+def test_seq_next_wraps_at_32_bits():
+    assert seq_next(0) == 1
+    assert seq_next(0xFFFFFFFE) == 0xFFFFFFFF
+    assert seq_next(0xFFFFFFFF) == 0
+
+
+def test_seq_newer_basic():
+    assert seq_newer(5, 4) is True
+    assert seq_newer(4, 5) is False
+    assert seq_newer(5, 5) is False
+
+
+def test_seq_newer_handles_wraparound():
+    # 1 is newer than (2^32 - 1) despite numeric value being smaller
+    assert seq_newer(1, 0xFFFFFFFF) is True
+    assert seq_newer(0xFFFFFFFF, 1) is False

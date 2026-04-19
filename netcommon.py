@@ -40,3 +40,20 @@ def decode(data: bytes):
     if not isinstance(obj, dict) or "t" not in obj:
         return None
     return obj
+
+
+SEQ_MOD = 1 << 32
+SEQ_HALF = 1 << 31
+
+
+def seq_next(s: int) -> int:
+    """Return the next sequence number (32-bit wrap)."""
+    return (s + 1) & (SEQ_MOD - 1)
+
+
+def seq_newer(a: int, b: int) -> bool:
+    """True if sequence `a` is strictly newer than `b` under wrap-around.
+
+    Uses the standard (a - b) mod 2^32 comparison against the half range.
+    """
+    return ((a - b) & (SEQ_MOD - 1)) != 0 and ((a - b) & (SEQ_MOD - 1)) < SEQ_HALF
