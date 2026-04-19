@@ -10,7 +10,7 @@ class HostSession:
     higher-level concerns (handshake, lobby, broadcast, disconnects) are
     added in later tasks."""
 
-    def __init__(self, bind_port, bind_host="127.0.0.1"):
+    def __init__(self, bind_port, bind_host="0.0.0.0"):
         self._bind_port = bind_port
         self._bind_host = bind_host
         self._sock = None

@@ -17,9 +17,9 @@ def test_host_binds_and_closes(free_udp_port):
 
 
 def test_host_bind_failure_raises(free_udp_port):
-    # Hold the port
+    # Hold the port on 0.0.0.0 (same address HostSession defaults to)
     blocker = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    blocker.bind(("127.0.0.1", free_udp_port))
+    blocker.bind(("0.0.0.0", free_udp_port))
     try:
         with pytest.raises(OSError):
             HostSession(bind_port=free_udp_port).start()
