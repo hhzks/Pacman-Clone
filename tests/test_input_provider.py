@@ -38,3 +38,45 @@ def test_first_matching_key_wins(monkeypatch):
     monkeypatch.setattr("pygame.key.key_code", _code)
     pressed = FakePressed({_code("up"): True, _code("down"): True})
     assert readDirectionFromKeys(["up", "down", "left", "right"], pressed) == 1
+
+
+from game import LocalInputProvider
+
+
+class FakeEntity:
+    def __init__(self, name):
+        self._name = name
+    def getName(self):
+        return self._name
+
+
+def test_local_input_provider_pacman(monkeypatch):
+    monkeypatch.setattr("pygame.key.key_code", _code)
+    pressed = FakePressed({_code("up"): True})
+    p = LocalInputProvider(
+        pacmanKeys=["up", "down", "left", "right"],
+        ghostKeyLists=[],
+    )
+    p.refresh(pressed)
+    assert p.directionFor(FakeEntity("Pacman"), ghostIndex=None) == 1
+
+
+def test_local_input_provider_ghost_by_index(monkeypatch):
+    monkeypatch.setattr("pygame.key.key_code", _code)
+    pressed = FakePressed({_code("d"): True})
+    p = LocalInputProvider(
+        pacmanKeys=["up", "down", "left", "right"],
+        ghostKeyLists=[["w", "s", "a", "d"]],
+    )
+    p.refresh(pressed)
+    assert p.directionFor(FakeEntity("Blinky"), ghostIndex=0) == 4
+
+
+def test_local_input_provider_ghost_without_slot_returns_zero(monkeypatch):
+    monkeypatch.setattr("pygame.key.key_code", _code)
+    p = LocalInputProvider(
+        pacmanKeys=["up", "down", "left", "right"],
+        ghostKeyLists=[],
+    )
+    p.refresh(FakePressed())
+    assert p.directionFor(FakeEntity("Blinky"), ghostIndex=0) == 0

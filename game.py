@@ -632,6 +632,39 @@ def readDirectionFromKeys(movementKeys, pressed):
     return 0
 
 
+class InputProvider:
+    """Abstract: produces a movement direction (0-4) for a given entity.
+    `ghostIndex` is the entity's position in PlayerGhosts (None for Pac-Man
+    or for CPU-driven ghosts; callers should not ask for those)."""
+    def refresh(self, pressed):
+        """Called once per frame with a pygame.key.get_pressed() snapshot
+        (or equivalent). Concrete providers can cache per-frame state here."""
+        raise NotImplementedError
+
+    def directionFor(self, entity, ghostIndex):
+        raise NotImplementedError
+
+
+class LocalInputProvider(InputProvider):
+    """All directions come from the local keyboard via config.ini keybinds."""
+    def __init__(self, pacmanKeys, ghostKeyLists):
+        self._pacmanKeys = pacmanKeys
+        self._ghostKeyLists = ghostKeyLists
+        self._pressed = None
+
+    def refresh(self, pressed):
+        self._pressed = pressed
+
+    def directionFor(self, entity, ghostIndex):
+        if self._pressed is None:
+            return 0
+        if entity.getName() == "Pacman":
+            return readDirectionFromKeys(self._pacmanKeys, self._pressed)
+        if ghostIndex is None or ghostIndex >= len(self._ghostKeyLists):
+            return 0
+        return readDirectionFromKeys(self._ghostKeyLists[ghostIndex], self._pressed)
+
+
 ########################################################MAIN PROGRAM####################################################
 def runGame(players, names, mazeString):
     names = names #ordered list of currently logged in account for each entity (empty string if no account)
