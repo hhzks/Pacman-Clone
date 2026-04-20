@@ -93,6 +93,27 @@ class HostSession:
             self._handle_hello(addr, packet)
         # Later tasks add INPUT, BYE, PING handling here.
 
+    def get_roster(self):
+        """Snapshot of current clients for the lobby UI. Thread-safe."""
+        with self._clients_lock:
+            return [
+                {"clientId": cid, "username": info["username"],
+                 "ghost": info["ghost"], "addr": info["addr"]}
+                for cid, info in self._clients.items()
+            ]
+
+    def _broadcast_lobby(self):
+        roster = self.get_roster()
+        payload = {
+            "t": PacketType.LOBBY,
+            "players": [{"username": r["username"], "ghost": r["ghost"]}
+                        for r in roster],
+        }
+        with self._clients_lock:
+            addrs = [info["addr"] for info in self._clients.values()]
+        for addr in addrs:
+            self._reliable.send_reliable(addr, dict(payload))
+
     def _handle_hello(self, addr, packet):
         if packet.get("protoVersion") != PROTO_VERSION:
             self._reliable.send_reliable(addr, {
@@ -110,7 +131,6 @@ class HostSession:
                     "t": PacketType.REJECT, "reason": "full"
                 })
                 return
-            # Allow re-join from the same address (idempotent)
             existing_id = self._addr_to_id.get(addr)
             if existing_id is None:
                 client_id = secrets.token_urlsafe(16)
@@ -122,9 +142,12 @@ class HostSession:
                     "last_seen": time.monotonic(),
                 }
                 self._addr_to_id[addr] = client_id
+                broadcast_needed = True
             else:
                 client_id = existing_id
                 ghost = self._clients[client_id]["ghost"]
+                broadcast_needed = False
+        # (now outside the lock)
         self._reliable.send_reliable(addr, {
             "t": PacketType.WELCOME,
             "clientId": client_id,
@@ -132,6 +155,8 @@ class HostSession:
             "playerSlots": self._max_clients,
             "ghostAssignment": ghost,
         })
+        if broadcast_needed:
+            self._broadcast_lobby()
 
     def debug_packet_count(self):
         with self._packet_count_lock:
