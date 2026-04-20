@@ -244,6 +244,89 @@ def runHostLobbyLoop(session, max_clients, maze_string):
     session.stop()
 
 
+joinsetupmenu = pygame_menu.Menu("Join Game", 720, 960,
+                                 theme=themes.THEME_SOLARIZED)
+joinIpInput = joinsetupmenu.add.text_input("Host IP: ", default="127.0.0.1",
+                                           maxchar=40, textinput_id="join_ip")
+joinPortInput = joinsetupmenu.add.text_input(
+    "Port: ", default=str(DEFAULT_PORT), maxchar=5,
+    textinput_id="join_port", input_type=pygame_menu.locals.INPUT_INT)
+joinUserLabel = joinsetupmenu.add.label(f"As: {users[0] if users[0] else '(guest)'}")
+joinStatusLabel = joinsetupmenu.add.label("", label_id="join_status")
+
+
+def joinFromMenu():
+    ip = joinsetupmenu.get_widget("join_ip").get_value().strip()
+    port = int(joinsetupmenu.get_widget("join_port").get_value())
+    username = users[0]
+    client = netclient.ClientSession(host_ip=ip, host_port=port,
+                                     username=username)
+    joinStatusLabel.set_title("Connecting...")
+    ok, info = client.connect(timeout_s=2.0)
+    if not ok:
+        reason = info.get("reason") or info.get("error") or "failed"
+        joinStatusLabel.set_title(f"Join failed: {reason}")
+        client.close()
+        return
+    runClientLobbyLoop(client, info)
+
+
+joinsetupmenu.add.button("Connect", joinFromMenu)
+
+
+def runClientLobbyLoop(client, welcome_info):
+    import pygame as _pygame
+    _pygame.init()
+    surface = _pygame.display.set_mode((720, 960))
+    clock = _pygame.time.Clock()
+    state = {"leave": False}
+
+    def _on_leave():
+        state["leave"] = True
+
+    lobbymenu = pygame_menu.Menu("Client Lobby", 720, 960,
+                                 theme=themes.THEME_SOLARIZED)
+    lobbymenu.add.label(f"You are: {welcome_info['ghostAssignment']}")
+    roster_label = lobbymenu.add.label("Players: (waiting)",
+                                       label_id="client_roster")
+    lobbymenu.add.button("Leave", _on_leave)
+
+    running = True
+    last_refresh = 0.0
+    while running:
+        events = _pygame.event.get()
+        for event in events:
+            if event.type == _pygame.QUIT:
+                running = False
+
+        client.poll()
+        now = _pygame.time.get_ticks() / 1000.0
+        if now - last_refresh > 0.2:
+            last_refresh = now
+            if client.lobby_roster:
+                label = " | ".join(
+                    f"{p['username'] or '(guest)'}: {p['ghost']}"
+                    for p in client.lobby_roster)
+                roster_label.set_title(label)
+
+        if client.start_info is not None:
+            # Host pressed Start — transition to in-match render
+            break
+        if state["leave"]:
+            break
+
+        lobbymenu.update(events)
+        lobbymenu.draw(surface)
+        _pygame.display.update()
+        clock.tick(60)
+
+    if client.start_info is not None:
+        netgame.runClientGame(client, welcome_info["mazeString"])
+    else:
+        client.send_bye()
+        client.close()
+
+
 #################MAZECHOICE(GAME) BLOCK###########################################################################
 
 def playGame(names):
