@@ -612,6 +612,84 @@ class Movement:
                 player.getDirection(), position):
                 player.setDirection(0)
 
+    def movePlayerWithDirection(self, player, newDirection):
+        """Same as movePlayer but with the direction precomputed (from either
+        keyboard input or a network packet). Exact copy of movePlayer's
+        post-key-read logic."""
+        try:
+            isDead = player.isDead()
+        except AttributeError:
+            isDead = False
+        if isDead:
+            return
+        position = player.getPosition()
+        if (player.getDirection() == 0
+                or math.ceil(newDirection / 2) == math.ceil(player.getDirection() / 2)
+                or self._board.coordInJunction(position[0], position[1])):
+            if not self._board.isNextBlockWall(newDirection, position):
+                if newDirection != 0 and newDirection != player.getDirection():
+                    player.setDirection(newDirection)
+        if self._board.isNextBlockWall(player.getDirection(), position):
+            player.setDirection(0)
+
+
+def stepSimulation(game, movement, pacman, ghosts, playerGhosts, botGhosts,
+                   inputProvider):
+    """Run one simulation tick. Returns a list of event strings describing
+    things that happened this tick:
+        "ghost-eaten:<name>", "pacman-died", "level-complete", "game-over",
+        "extra-life".
+    Caller is responsible for timing (dt), rendering, and pygame event pump.
+    """
+    events = []
+
+    # Move player-controlled ghosts
+    playerGhostList = playerGhosts.getGhosts()
+    for ghost in ghosts.getGhosts():
+        if ghost in playerGhostList:
+            idx = playerGhostList.index(ghost)
+            direction = inputProvider.directionFor(ghost, ghostIndex=idx)
+            movement.movePlayerWithDirection(ghost, direction)
+        elif ghost in botGhosts.getGhosts():
+            movement.moveCPU(ghost)
+
+    # Move Pac-Man
+    pacmanDir = inputProvider.directionFor(pacman, ghostIndex=None)
+    movement.movePlayerWithDirection(pacman, pacmanDir)
+
+    # Score / pellet collisions
+    prevLives = game.getLives()
+    game.updateScore()
+    if game.getLives() > prevLives:
+        events.append("extra-life")
+
+    # Ghost collisions (combo within a single tick)
+    pacmanBox = pacman.getBoundBox()
+    eaten_this_tick = 0
+    for ghost in ghosts.getGhosts():
+        if pacmanBox.colliderect(ghost.getBoundBox()):
+            if ghost.isScared():
+                ghost.killGhost()
+                eaten_this_tick += 1
+                game.addScore(100 * (2 ** eaten_this_tick))
+                events.append(f"ghost-eaten:{ghost.getName()}")
+            elif not ghost.isScared():
+                game.loseLevel()
+                events.append("pacman-died")
+                break  # loseLevel already reset positions; stop checking
+
+    # Second updateScore call preserves parity with existing runGame loop
+    game.updateScore()
+
+    if game.checkIfLevelComplete():
+        events.append("level-complete")
+
+    if game.gameIsOver():
+        events.append("game-over")
+
+    return events
+
+
 def getControls(player, configObject):
     keys = []
     keys.append(configObject.get(player, 'up'))
@@ -620,6 +698,80 @@ def getControls(player, configObject):
     keys.append(configObject.get(player, 'right'))
     return keys
 
+
+def readDirectionFromKeys(movementKeys, pressed):
+    """Pure function: given the ordered [up, down, left, right] config tokens
+    and a pygame key-pressed snapshot, return 1/2/3/4 for the first matching
+    direction or 0 if none pressed. Mirrors the original Movement.movePlayer
+    key scan, with the pressed-state injectable for testing."""
+    for i, key in enumerate(movementKeys):
+        if pressed[pygame.key.key_code(key)]:
+            return i + 1
+    return 0
+
+
+class InputProvider:
+    """Abstract: produces a movement direction (0-4) for a given entity.
+    `ghostIndex` is the entity's position in PlayerGhosts (None for Pac-Man
+    or for CPU-driven ghosts; callers should not ask for those)."""
+    def refresh(self, pressed):
+        """Called once per frame with a pygame.key.get_pressed() snapshot
+        (or equivalent). Concrete providers can cache per-frame state here."""
+        raise NotImplementedError
+
+    def directionFor(self, entity, ghostIndex):
+        raise NotImplementedError
+
+
+class LocalInputProvider(InputProvider):
+    """All directions come from the local keyboard via config.ini keybinds."""
+    def __init__(self, pacmanKeys, ghostKeyLists):
+        self._pacmanKeys = pacmanKeys
+        self._ghostKeyLists = ghostKeyLists
+        self._pressed = None
+
+    def refresh(self, pressed):
+        self._pressed = pressed
+
+    def directionFor(self, entity, ghostIndex):
+        if self._pressed is None:
+            return 0
+        if entity.getName() == "Pacman":
+            return readDirectionFromKeys(self._pacmanKeys, self._pressed)
+        if ghostIndex is None or ghostIndex >= len(self._ghostKeyLists):
+            return 0
+        return readDirectionFromKeys(self._ghostKeyLists[ghostIndex], self._pressed)
+
+
+class NetworkInputProvider(InputProvider):
+    """Host-side provider. Pac-Man reads from the local keyboard; player-ghost
+    slots read from a thread-safe client-inputs snapshot supplied by HostSession.
+
+    `clientInputsFn()` returns {clientId -> {"dir": int, "seq": int}}.
+    `ghostOwnership` is {ghostIndex -> clientId}; unowned indices fall back
+    to direction 0 (which triggers CPU AI via the existing flow)."""
+    def __init__(self, pacmanKeys, clientInputsFn, ghostOwnership):
+        self._pacmanKeys = pacmanKeys
+        self._clientInputsFn = clientInputsFn
+        self._ghostOwnership = ghostOwnership
+        self._pressed = None
+
+    def refresh(self, pressed):
+        self._pressed = pressed
+
+    def directionFor(self, entity, ghostIndex):
+        if entity.getName() == "Pacman":
+            if self._pressed is None:
+                return 0
+            return readDirectionFromKeys(self._pacmanKeys, self._pressed)
+        cid = self._ghostOwnership.get(ghostIndex)
+        if cid is None:
+            return 0
+        inputs = self._clientInputsFn()
+        entry = inputs.get(cid)
+        if entry is None:
+            return 0
+        return entry["dir"]
 
 
 ########################################################MAIN PROGRAM####################################################
@@ -655,8 +807,6 @@ def runGame(players, names, mazeString):
     ghosts = GhostGroup(blinky, inky, pinky, clyde)
     movement = Movement(board, pacman, blinky)
     PLAYER1KEYS = getControls('Player 1', configObj)
-    ghostsCombo = 0
-
 
     match extraPlayers:
         case 0:
@@ -701,48 +851,23 @@ def runGame(players, names, mazeString):
         replayFile.write(f'{FPS}\n')
         replayFile.write(f'{board.getBoardStr()}\n')
 
+    inputProvider = LocalInputProvider(PLAYER1KEYS, ghostKeyList)
+
     while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
 
-        if game.checkIfLevelComplete():
+        inputProvider.refresh(pygame.key.get_pressed())
+        events = stepSimulation(game, movement, pacman, ghosts,
+                                playerGhosts, botGhosts, inputProvider)
+
+        if "level-complete" in events:
             game.loadNextLevel()
-
-
-
-        ###MOVEMENT###
-        for ghost in ghosts.getGhosts():
-            if ghost in playerGhosts.getGhosts():
-                movement.movePlayer(ghost, ghostKeyList[ghosts.getIndex(ghost)])
-            elif ghost in botGhosts.getGhosts():
-                movement.moveCPU(ghost)
-
-        movement.movePlayer(pacman, PLAYER1KEYS)
-        ###############
-
-
-        pacmanBox = pacman.getBoundBox()
-
-        game.updateScore()
-
-        for ghost in ghosts.getGhosts():
-            if pacmanBox.colliderect(ghost.getBoundBox()):
-                if ghost.isScared():
-                    ghost.killGhost()
-                    ghostsCombo += 1
-                    game.addScore(100 * (2 ** ghostsCombo))
-                elif not (ghost.isScared()):
-                    game.loseLevel()
-
-        if game.gameIsOver():
+        if "game-over" in events:
             print("Ran out of lives!")
             running = False
 
-        if not ghosts.inScaredPhase() and ghostsCombo != 0:
-            ghostsCombo = 0
-
-        game.updateScore()
         game.render(screen, dt)
         pygame.display.flip()
         if RECORDGAME :
