@@ -14,8 +14,8 @@ class HostSession:
     higher-level concerns (handshake, lobby, broadcast, disconnects) are
     added in later tasks."""
 
-    def __init__(self, bind_port, bind_host="0.0.0.0",
-                 maze_string="", max_clients=4):
+    def __init__(self, bind_port, bind_host="0.0.0.0", maze_string="",
+                 max_clients=4, ping_timeout_s=3.0):
         self._bind_port = bind_port
         self._bind_host = bind_host
         self._maze_string = maze_string
@@ -32,6 +32,10 @@ class HostSession:
         # Reverse index: addr -> clientId (fast lookup on every packet)
         self._addr_to_id = {}
         self._game_started = False
+        self._ping_timeout_s = ping_timeout_s
+        # clientId -> {"dir": int, "seq": int}
+        self._client_inputs = {}
+        self._inputs_lock = threading.Lock()
 
     @property
     def port(self):
@@ -87,6 +91,12 @@ class HostSession:
                 continue
             with self._packet_count_lock:
                 self._packet_count += 1
+            # INPUT packets are unreliable; bypass seq dedup so retransmits
+            # from the client (or seq collisions with other packet types) are
+            # never silently dropped.
+            if packet.get("t") == PacketType.INPUT:
+                self._dispatch(addr, packet)
+                continue
             processed = self._reliable.handle_incoming(addr, packet)
             if processed is None:
                 continue
@@ -96,7 +106,60 @@ class HostSession:
         t = packet.get("t")
         if t == PacketType.HELLO:
             self._handle_hello(addr, packet)
-        # Later tasks add INPUT, BYE, PING handling here.
+            return
+        cid = packet.get("clientId")
+        if not cid:
+            return
+        with self._clients_lock:
+            info = self._clients.get(cid)
+            if info is None or info["addr"] != addr:
+                return
+            info["last_seen"] = time.monotonic()
+        if t == PacketType.INPUT:
+            self._handle_input(cid, packet)
+        elif t == PacketType.BYE:
+            self._remove_client(cid)
+        elif t == PacketType.PING:
+            self._reliable.send_unreliable(addr, {
+                "t": PacketType.PONG, "clientId": cid})
+        # PONG from client is ignored; last_seen refresh is sufficient.
+
+    def _handle_input(self, cid, packet):
+        dir_ = packet.get("dir", 0)
+        seq = packet.get("inputSeq", 0)
+        with self._inputs_lock:
+            prev = self._client_inputs.get(cid)
+            if prev is not None and seq < prev["seq"]:
+                return  # stale
+            self._client_inputs[cid] = {"dir": dir_, "seq": seq}
+
+    def _remove_client(self, cid):
+        with self._clients_lock:
+            info = self._clients.pop(cid, None)
+            if info:
+                self._addr_to_id.pop(info["addr"], None)
+        with self._inputs_lock:
+            self._client_inputs.pop(cid, None)
+        if info:
+            self._broadcast_lobby()
+            # Caller (Task 18 runHostedGame) will handle moving the ghost to Bots.
+
+    def get_client_inputs(self):
+        with self._inputs_lock:
+            return {cid: dict(v) for cid, v in self._client_inputs.items()}
+
+    def check_timeouts(self):
+        """Remove clients that haven't sent anything for > ping_timeout_s.
+        Call this periodically from the main thread."""
+        now = time.monotonic()
+        stale = []
+        with self._clients_lock:
+            for cid, info in list(self._clients.items()):
+                if now - info["last_seen"] > self._ping_timeout_s:
+                    stale.append(cid)
+        for cid in stale:
+            self._remove_client(cid)
+        return stale
 
     def get_roster(self):
         """Snapshot of current clients for the lobby UI. Thread-safe."""
