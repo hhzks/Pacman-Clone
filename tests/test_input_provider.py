@@ -80,3 +80,42 @@ def test_local_input_provider_ghost_without_slot_returns_zero(monkeypatch):
     )
     p.refresh(FakePressed())
     assert p.directionFor(FakeEntity("Blinky"), ghostIndex=0) == 0
+
+
+from game import NetworkInputProvider
+
+
+def test_network_input_provider_uses_buffer_for_ghost(monkeypatch):
+    monkeypatch.setattr("pygame.key.key_code", _code)
+    client_inputs = {"cid-a": {"dir": 2, "seq": 10}}
+    ownership = {0: "cid-a"}  # ghostIndex 0 is owned by client cid-a
+    p = NetworkInputProvider(
+        pacmanKeys=["up", "down", "left", "right"],
+        clientInputsFn=lambda: client_inputs,
+        ghostOwnership=ownership,
+    )
+    p.refresh(FakePressed())
+    assert p.directionFor(FakeEntity("Blinky"), ghostIndex=0) == 2
+
+
+def test_network_input_provider_unowned_ghost_returns_zero(monkeypatch):
+    monkeypatch.setattr("pygame.key.key_code", _code)
+    p = NetworkInputProvider(
+        pacmanKeys=["up", "down", "left", "right"],
+        clientInputsFn=lambda: {},
+        ghostOwnership={},
+    )
+    p.refresh(FakePressed())
+    assert p.directionFor(FakeEntity("Blinky"), ghostIndex=0) == 0
+
+
+def test_network_input_provider_pacman_uses_local_keys(monkeypatch):
+    monkeypatch.setattr("pygame.key.key_code", _code)
+    pressed = FakePressed({_code("up"): True})
+    p = NetworkInputProvider(
+        pacmanKeys=["up", "down", "left", "right"],
+        clientInputsFn=lambda: {},
+        ghostOwnership={},
+    )
+    p.refresh(pressed)
+    assert p.directionFor(FakeEntity("Pacman"), ghostIndex=None) == 1

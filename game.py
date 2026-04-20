@@ -743,6 +743,37 @@ class LocalInputProvider(InputProvider):
         return readDirectionFromKeys(self._ghostKeyLists[ghostIndex], self._pressed)
 
 
+class NetworkInputProvider(InputProvider):
+    """Host-side provider. Pac-Man reads from the local keyboard; player-ghost
+    slots read from a thread-safe client-inputs snapshot supplied by HostSession.
+
+    `clientInputsFn()` returns {clientId -> {"dir": int, "seq": int}}.
+    `ghostOwnership` is {ghostIndex -> clientId}; unowned indices fall back
+    to direction 0 (which triggers CPU AI via the existing flow)."""
+    def __init__(self, pacmanKeys, clientInputsFn, ghostOwnership):
+        self._pacmanKeys = pacmanKeys
+        self._clientInputsFn = clientInputsFn
+        self._ghostOwnership = ghostOwnership
+        self._pressed = None
+
+    def refresh(self, pressed):
+        self._pressed = pressed
+
+    def directionFor(self, entity, ghostIndex):
+        if entity.getName() == "Pacman":
+            if self._pressed is None:
+                return 0
+            return readDirectionFromKeys(self._pacmanKeys, self._pressed)
+        cid = self._ghostOwnership.get(ghostIndex)
+        if cid is None:
+            return 0
+        inputs = self._clientInputsFn()
+        entry = inputs.get(cid)
+        if entry is None:
+            return 0
+        return entry["dir"]
+
+
 ########################################################MAIN PROGRAM####################################################
 def runGame(players, names, mazeString):
     names = names #ordered list of currently logged in account for each entity (empty string if no account)
