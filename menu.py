@@ -14,6 +14,7 @@ import socket as _socket
 import nethost
 import netclient
 import netgame
+import netupnp
 import boards as _boards
 from netcommon import DEFAULT_PORT
 
@@ -154,7 +155,7 @@ hostPortInput = hostsetupmenu.add.text_input(
     "Port: ", default=str(DEFAULT_PORT), maxchar=5,
     textinput_id="host_port", input_type=pygame_menu.locals.INPUT_INT,
 )
-hostsetupmenu.add.label("(Forward this UDP port on your router for internet play)")
+hostsetupmenu.add.label("(UPnP will try to open this port automatically)")
 hostStatusLabel = hostsetupmenu.add.label("", label_id="host_status")
 
 
@@ -172,13 +173,18 @@ def startHostingFromMenu():
     except OSError as err:
         hostStatusLabel.set_title(f"Port busy: {err}")
         return
-    runHostLobbyLoop(session, max_clients, maze_string)
+    upnp = netupnp.UpnpMapper(port=port)
+    upnp.start()
+    try:
+        runHostLobbyLoop(session, max_clients, maze_string, upnp)
+    finally:
+        upnp.stop()
 
 
 hostsetupmenu.add.button("Start hosting", startHostingFromMenu)
 
 
-def runHostLobbyLoop(session, max_clients, maze_string):
+def runHostLobbyLoop(session, max_clients, maze_string, upnp=None):
     """Custom pygame loop: shows host lobby with live roster, until
     host clicks Start Match, Cancel, or closes the window."""
     import pygame as _pygame
@@ -197,7 +203,8 @@ def runHostLobbyLoop(session, max_clients, maze_string):
 
     lobbymenu = pygame_menu.Menu("Host Lobby", 720, 960,
                                  theme=themes.THEME_SOLARIZED)
-    lobbymenu.add.label(f"Your IP: {_get_lan_ip()}:{session.port}")
+    lobbymenu.add.label(f"LAN IP: {_get_lan_ip()}:{session.port}")
+    online_label = lobbymenu.add.label("", label_id="online_status")
     roster_label = lobbymenu.add.label("Waiting for players...",
                                        label_id="roster")
     start_button = lobbymenu.add.button("Start Match", _on_start)
@@ -221,6 +228,8 @@ def runHostLobbyLoop(session, max_clients, maze_string):
                 lines.append(f"{uname}: {r['ghost']}")
             roster_label.set_title(" | ".join(lines))
             session.check_timeouts()
+            if upnp is not None:
+                online_label.set_title(upnp.status_line())
 
         if state["start"] or state["cancel"]:
             running = False
