@@ -93,3 +93,19 @@ def test_unknown_client_id_input_dropped(free_udp_port):
         assert host.get_client_inputs() == {}
     finally:
         host.stop()
+
+
+def test_handle_input_wrapsafe_accepts_post_wrap_seq(free_udp_port):
+    host = HostSession(bind_port=free_udp_port,
+                       maze_string="M", max_clients=4)
+    # No need to call start() — directly seed internal state.
+    cid = "test-client"
+    # Prime with a seq near the top of the 32-bit range
+    with host._inputs_lock:
+        host._client_inputs[cid] = {"dir": 1, "seq": 2**32 - 10}
+    # A post-wrap seq of 5 is genuinely newer than 2^32-10 under wrap semantics
+    host._handle_input(cid, {"dir": 2, "inputSeq": 5})
+    inputs = host.get_client_inputs()
+    assert cid in inputs
+    assert inputs[cid]["seq"] == 5
+    assert inputs[cid]["dir"] == 2

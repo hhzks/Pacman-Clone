@@ -5,7 +5,7 @@ import time
 from collections import deque
 
 from netcommon import (encode, decode, ReliableChannel, PacketType,
-                       PROTO_VERSION, MAX_CLIENT_PACKETS_PER_SEC)
+                       PROTO_VERSION, MAX_CLIENT_PACKETS_PER_SEC, seq_newer)
 
 GHOST_ASSIGNMENT_ORDER = ["Blinky", "Inky", "Pinky", "Clyde"]
 
@@ -141,7 +141,7 @@ class HostSession:
         seq = packet.get("inputSeq", 0)
         with self._inputs_lock:
             prev = self._client_inputs.get(cid)
-            if prev is not None and seq < prev["seq"]:
+            if prev is not None and not seq_newer(seq, prev["seq"]):
                 return  # stale
             self._client_inputs[cid] = {"dir": dir_, "seq": seq}
 
