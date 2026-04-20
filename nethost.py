@@ -2,9 +2,10 @@ import secrets
 import socket
 import threading
 import time
+from collections import deque
 
 from netcommon import (encode, decode, ReliableChannel, PacketType,
-                       PROTO_VERSION)
+                       PROTO_VERSION, MAX_CLIENT_PACKETS_PER_SEC)
 
 GHOST_ASSIGNMENT_ORDER = ["Blinky", "Inky", "Pinky", "Clyde"]
 
@@ -36,6 +37,9 @@ class HostSession:
         # clientId -> {"dir": int, "seq": int}
         self._client_inputs = {}
         self._inputs_lock = threading.Lock()
+        # addr -> deque[timestamps] for per-addr rate limiting
+        self._rate_buckets = {}
+        self._rate_lock = threading.Lock()
 
     @property
     def port(self):
@@ -86,6 +90,14 @@ class HostSession:
                 if getattr(exc, "winerror", None) == 10054:
                     continue
                 return
+            now = time.monotonic()
+            with self._rate_lock:
+                bucket = self._rate_buckets.setdefault(addr, deque())
+                while bucket and now - bucket[0] > 1.0:
+                    bucket.popleft()
+                if len(bucket) >= MAX_CLIENT_PACKETS_PER_SEC:
+                    continue  # drop — over rate limit
+                bucket.append(now)
             packet = decode(data)
             if packet is None:
                 continue
@@ -140,6 +152,9 @@ class HostSession:
                 self._addr_to_id.pop(info["addr"], None)
         with self._inputs_lock:
             self._client_inputs.pop(cid, None)
+        if info:
+            with self._rate_lock:
+                self._rate_buckets.pop(info["addr"], None)
         if info:
             self._broadcast_lobby()
             # Caller (Task 18 runHostedGame) will handle moving the ghost to Bots.
