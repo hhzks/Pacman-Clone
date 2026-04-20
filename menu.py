@@ -10,6 +10,12 @@ import login
 import mazecreator
 import replay
 import keyboard
+import socket as _socket
+import nethost
+import netclient
+import netgame
+import boards as _boards
+from netcommon import DEFAULT_PORT
 
 pygame.init()
 surface = pygame.display.set_mode((720, 960))
@@ -92,6 +98,84 @@ playerSelection = gamemenu.add.selector("Choose players: ",
                                         [('Single Player', 0), ('2 players', 1), ('3 players', 2), ('4 players', 3),
                                          ('5 players', 4)])
 gamemenu.add.button('Enter', openMazeMenu)
+
+
+def openOnlineMenu():
+    gamemenu._open(onlinemenu)
+
+
+gamemenu.add.button("Online", openOnlineMenu)
+
+
+def _get_lan_ip():
+    try:
+        s = _socket.socket(_socket.AF_INET, _socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except OSError:
+        return "127.0.0.1"
+
+
+def openHostSetup():
+    onlinemenu._open(hostsetupmenu)
+
+
+def openJoinSetup():
+    onlinemenu._open(joinsetupmenu)
+
+
+onlinemenu = pygame_menu.Menu("Online", 720, 960, theme=themes.THEME_SOLARIZED)
+onlinemenu.add.button("Host", openHostSetup)
+onlinemenu.add.button("Join", openJoinSetup)
+
+
+# Host setup — player count, maze, port
+def _buildHostMazesList():
+    result = [("Default",
+               "++++++++++++++++++++ZlllnRlllvZ+T+TT+T+v-MT0TT0T3LZ+T+TT+T+vZllllllllvZ+TT++TT+vZ+TT++TT+vZlnRnRnRlv++T+PP+T++M0T+PP+T03M0TM003T03M0TPYfPT03++TP00PT++004300M400++TP00PT++M0TPYfPT03M0TM003T03M0TP++PT03++TP++PT++ZlllnRlllvZ+T+TT+T+vZ+T+TT+T+v-nRlk5lnRL+TTT++TTT++TTT++TTT+ZlnRnRnRlvZ+++TT+++vZ+++TT+++vZllllllllv++++++++++++++++++++")]
+    lb = database.Leaderboard()
+    for item in lb.getMazes():
+        result.append((f"{item[0]} by {item[1]}", item[2]))
+    lb.close()
+    return result
+
+
+hostsetupmenu = pygame_menu.Menu("Host Setup", 720, 960, theme=themes.THEME_SOLARIZED)
+hostsetupmenu.add.label(f"Your LAN IP: {_get_lan_ip()}")
+hostPlayerSelector = hostsetupmenu.add.selector(
+    "Players: ",
+    [("2 players", 1), ("3 players", 2), ("4 players", 3), ("5 players", 4)],
+)
+hostMazeSelector = hostsetupmenu.add.selector(
+    "Maze: ", items=_buildHostMazesList())
+hostPortInput = hostsetupmenu.add.text_input(
+    "Port: ", default=str(DEFAULT_PORT), maxchar=5,
+    textinput_id="host_port", input_type=pygame_menu.locals.INPUT_INT,
+)
+hostsetupmenu.add.label("(Forward this UDP port on your router for internet play)")
+hostStatusLabel = hostsetupmenu.add.label("", label_id="host_status")
+
+
+def startHostingFromMenu():
+    if users[0] == "":
+        hostStatusLabel.set_title("Host must be logged in.")
+        return
+    port = int(hostsetupmenu.get_widget("host_port").get_value())
+    maze_string = hostMazeSelector.get_value()[0][1]
+    max_clients = hostPlayerSelector.get_value()[0][1]  # 1..4
+    session = nethost.HostSession(
+        bind_port=port, maze_string=maze_string, max_clients=max_clients)
+    try:
+        session.start()
+    except OSError as err:
+        hostStatusLabel.set_title(f"Port busy: {err}")
+        return
+    runHostLobbyLoop(session, max_clients, maze_string)
+
+
+hostsetupmenu.add.button("Start hosting", startHostingFromMenu)
 
 
 #################MAZECHOICE(GAME) BLOCK###########################################################################
