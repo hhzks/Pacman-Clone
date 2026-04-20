@@ -1,3 +1,4 @@
+import collections
 import json
 import threading
 import time as _time
@@ -8,6 +9,7 @@ DEFAULT_PORT = 5555
 PING_INTERVAL_S = 1.0
 PING_TIMEOUT_S = 3.0
 MAX_CLIENT_PACKETS_PER_SEC = 500
+DEDUP_WINDOW = 4096
 
 
 class PacketType:
@@ -78,7 +80,7 @@ class ReliableChannel:
         self._lock = threading.Lock()
         self._next_out_seq = 1
         self._outbox = {}   # seq -> {"addr", "packet", "deadline", "retries", "first_sent"}
-        self._seen_in = {}  # (addr, seq) -> True (dedup set)
+        self._seen_in = collections.OrderedDict()  # (addr, seq) -> True (dedup set)
         self._timed_out = []
 
     def _alloc_seq(self):
@@ -130,7 +132,12 @@ class ReliableChannel:
         key = (addr, s)
         with self._lock:
             dup = key in self._seen_in
-            self._seen_in[key] = True
+            if dup:
+                self._seen_in.move_to_end(key)
+            else:
+                self._seen_in[key] = True
+                while len(self._seen_in) > DEDUP_WINDOW:
+                    self._seen_in.popitem(last=False)
         # Always ACK — even duplicates — so the peer stops retrying.
         self._send(addr, {"t": PacketType.ACK, "ack": s})
         if dup:

@@ -1,6 +1,6 @@
 import time
 import pytest
-from netcommon import ReliableChannel, PacketType
+from netcommon import ReliableChannel, PacketType, DEDUP_WINDOW
 
 
 class FakeTransport:
@@ -71,3 +71,13 @@ def test_unreliable_packet_has_no_retries():
     clock[0] = 5.0
     ch.tick()
     assert len(t.outbox) == 1
+
+
+def test_seen_in_bounded_by_dedup_window():
+    sent = []
+    ch = ReliableChannel(send_callback=lambda addr, pkt: sent.append((addr, pkt)),
+                         now_fn=lambda: 0.0)
+    addr = ("127.0.0.1", 5555)
+    for seq in range(10000):
+        ch.handle_incoming(addr, {"t": PacketType.HELLO, "s": seq})
+    assert len(ch._seen_in) <= DEDUP_WINDOW
