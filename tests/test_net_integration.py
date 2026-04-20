@@ -27,10 +27,6 @@ def test_two_clients_full_lobby_and_start(free_udp_port):
 
         assert _wait(lambda: len(host.get_roster()) == 2)
 
-        # Re-broadcast lobby so any client whose LOBBY arrived during connect()
-        # (and was silently consumed by the handshake drain loop) can catch up.
-        host._broadcast_lobby()
-
         # Verify roster propagated to both clients
         def _has_two(c):
             c.poll()

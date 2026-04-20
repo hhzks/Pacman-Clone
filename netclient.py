@@ -130,18 +130,33 @@ class ClientSession:
         })
         deadline = time.monotonic() + timeout_s
         while time.monotonic() < deadline:
-            for pkt in self.drain_inbox():
-                if pkt["t"] == PacketType.WELCOME:
-                    self.client_id = pkt["clientId"]
-                    self._ghost_assignment = pkt["ghostAssignment"]
-                    self._maze_string = pkt["mazeString"]
-                    return True, {
-                        "clientId": self.client_id,
-                        "ghostAssignment": self._ghost_assignment,
-                        "mazeString": self._maze_string,
-                        "playerSlots": pkt.get("playerSlots"),
-                    }
-                if pkt["t"] == PacketType.REJECT:
-                    return False, {"reason": pkt.get("reason", "unknown")}
+            batch = self.drain_inbox()
+            welcome_pkt = None
+            reject_pkt = None
+            deferred = []
+            for pkt in batch:
+                t = pkt.get("t")
+                if t == PacketType.WELCOME and welcome_pkt is None:
+                    welcome_pkt = pkt
+                elif t == PacketType.REJECT and reject_pkt is None:
+                    reject_pkt = pkt
+                else:
+                    deferred.append(pkt)
+            # Re-queue any non-handshake packets so poll() can see them later.
+            if deferred:
+                with self._inbox_lock:
+                    self._inbox = deferred + self._inbox
+            if welcome_pkt is not None:
+                self.client_id = welcome_pkt["clientId"]
+                self._ghost_assignment = welcome_pkt["ghostAssignment"]
+                self._maze_string = welcome_pkt["mazeString"]
+                return True, {
+                    "clientId": self.client_id,
+                    "ghostAssignment": self._ghost_assignment,
+                    "mazeString": self._maze_string,
+                    "playerSlots": welcome_pkt.get("playerSlots"),
+                }
+            if reject_pkt is not None:
+                return False, {"reason": reject_pkt.get("reason", "unknown")}
             time.sleep(0.02)
         return False, {"error": "unreachable/timeout"}
