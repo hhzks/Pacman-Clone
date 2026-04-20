@@ -24,6 +24,13 @@ class ClientSession:
         self._running = False
         self._inbox = []  # list of decoded packets for the main thread
         self._inbox_lock = threading.Lock()
+        self.start_info = None  # set once START arrives
+        self.lobby_roster = []  # updated on every LOBBY
+        self.events = []        # accumulates EVENT packets
+        self.latest_state = None  # set by later task (16)
+        self.prev_state = None
+        self.latest_state_arrived_at = 0.0
+        self.prev_state_arrived_at = 0.0
 
     def _raw_send(self, addr, packet):
         try:
@@ -65,6 +72,26 @@ class ClientSession:
         if self._thread is not None:
             self._thread.join(timeout=1.0)
         self._sock.close()
+
+    def poll(self):
+        """Drain the inbox and update self.start_info / self.lobby_roster
+        / self.events. Call each frame from the main thread."""
+        for pkt in self.drain_inbox():
+            t = pkt.get("t")
+            if t == PacketType.START:
+                self.start_info = pkt
+            elif t == PacketType.LOBBY:
+                self.lobby_roster = pkt.get("players", [])
+            elif t == PacketType.EVENT:
+                self.events.append(pkt)
+            elif t == PacketType.BYE:
+                self.events.append({"t": PacketType.BYE})
+
+    def send_bye(self):
+        if self.client_id is not None:
+            self._reliable.send_reliable(self._host_addr, {
+                "t": PacketType.BYE, "clientId": self.client_id,
+            })
 
     def connect(self, timeout_s=2.0):
         """Send HELLO, wait for WELCOME or REJECT. Returns (ok, info_dict)."""
