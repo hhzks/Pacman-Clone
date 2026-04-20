@@ -1,0 +1,93 @@
+import socket
+import threading
+import time
+
+from netcommon import (encode, decode, ReliableChannel, PacketType,
+                       PROTO_VERSION)
+
+
+class ClientSession:
+    """Client-side UDP session. Handles HELLO/WELCOME, receives LOBBY/START,
+    sends INPUT, receives STATE/EVENT. One client talks to one host."""
+
+    def __init__(self, host_ip, host_port, username=""):
+        self._host_addr = (host_ip, host_port)
+        self._username = username or ""
+        self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self._sock.settimeout(0.1)
+        self._sock.bind(("0.0.0.0", 0))  # ephemeral port
+        self._reliable = ReliableChannel(send_callback=self._raw_send)
+        self.client_id = None
+        self._ghost_assignment = None
+        self._maze_string = None
+        self._thread = None
+        self._running = False
+        self._inbox = []  # list of decoded packets for the main thread
+        self._inbox_lock = threading.Lock()
+
+    def _raw_send(self, addr, packet):
+        try:
+            self._sock.sendto(encode(packet), addr)
+        except OSError:
+            pass
+
+    def _start_listener(self):
+        self._running = True
+        self._thread = threading.Thread(target=self._listener_loop,
+                                        name="ClientListener", daemon=True)
+        self._thread.start()
+
+    def _listener_loop(self):
+        while self._running:
+            try:
+                data, addr = self._sock.recvfrom(8192)
+            except socket.timeout:
+                self._reliable.tick()
+                continue
+            except OSError:
+                return
+            packet = decode(data)
+            if packet is None:
+                continue
+            processed = self._reliable.handle_incoming(addr, packet)
+            if processed is None:
+                continue
+            with self._inbox_lock:
+                self._inbox.append(processed)
+
+    def drain_inbox(self):
+        with self._inbox_lock:
+            out, self._inbox = self._inbox, []
+        return out
+
+    def close(self):
+        self._running = False
+        if self._thread is not None:
+            self._thread.join(timeout=1.0)
+        self._sock.close()
+
+    def connect(self, timeout_s=2.0):
+        """Send HELLO, wait for WELCOME or REJECT. Returns (ok, info_dict)."""
+        self._start_listener()
+        self._reliable.send_reliable(self._host_addr, {
+            "t": PacketType.HELLO,
+            "username": self._username,
+            "protoVersion": PROTO_VERSION,
+        })
+        deadline = time.monotonic() + timeout_s
+        while time.monotonic() < deadline:
+            for pkt in self.drain_inbox():
+                if pkt["t"] == PacketType.WELCOME:
+                    self.client_id = pkt["clientId"]
+                    self._ghost_assignment = pkt["ghostAssignment"]
+                    self._maze_string = pkt["mazeString"]
+                    return True, {
+                        "clientId": self.client_id,
+                        "ghostAssignment": self._ghost_assignment,
+                        "mazeString": self._maze_string,
+                        "playerSlots": pkt.get("playerSlots"),
+                    }
+                if pkt["t"] == PacketType.REJECT:
+                    return False, {"reason": pkt.get("reason", "unknown")}
+            time.sleep(0.02)
+        return False, {"error": "unreachable/timeout"}
