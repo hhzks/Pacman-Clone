@@ -1,8 +1,12 @@
+import secrets
 import socket
 import threading
 import time
 
-from netcommon import encode, decode, ReliableChannel, PacketType
+from netcommon import (encode, decode, ReliableChannel, PacketType,
+                       PROTO_VERSION)
+
+GHOST_ASSIGNMENT_ORDER = ["Blinky", "Inky", "Pinky", "Clyde"]
 
 
 class HostSession:
@@ -10,15 +14,24 @@ class HostSession:
     higher-level concerns (handshake, lobby, broadcast, disconnects) are
     added in later tasks."""
 
-    def __init__(self, bind_port, bind_host="0.0.0.0"):
+    def __init__(self, bind_port, bind_host="0.0.0.0",
+                 maze_string="", max_clients=4):
         self._bind_port = bind_port
         self._bind_host = bind_host
+        self._maze_string = maze_string
+        self._max_clients = max_clients  # number of human ghost slots
         self._sock = None
         self._thread = None
         self._running = False
         self._packet_count = 0
         self._packet_count_lock = threading.Lock()
-        self._reliable = None  # Constructed in start()
+        self._reliable = None
+        # Client registry: clientId -> {"addr", "username", "ghost", "last_seen"}
+        self._clients = {}
+        self._clients_lock = threading.Lock()
+        # Reverse index: addr -> clientId (fast lookup on every packet)
+        self._addr_to_id = {}
+        self._game_started = False
 
     @property
     def port(self):
@@ -63,14 +76,62 @@ class HostSession:
                 self._reliable.tick()
                 continue
             except OSError:
-                return  # socket closed
+                return
             packet = decode(data)
             if packet is None:
                 continue
             with self._packet_count_lock:
                 self._packet_count += 1
-            # Further handling (handshake, input dispatch) added in later tasks.
-            self._reliable.handle_incoming(addr, packet)
+            processed = self._reliable.handle_incoming(addr, packet)
+            if processed is None:
+                continue
+            self._dispatch(addr, processed)
+
+    def _dispatch(self, addr, packet):
+        t = packet.get("t")
+        if t == PacketType.HELLO:
+            self._handle_hello(addr, packet)
+        # Later tasks add INPUT, BYE, PING handling here.
+
+    def _handle_hello(self, addr, packet):
+        if packet.get("protoVersion") != PROTO_VERSION:
+            self._reliable.send_reliable(addr, {
+                "t": PacketType.REJECT, "reason": "version"
+            })
+            return
+        if self._game_started:
+            self._reliable.send_reliable(addr, {
+                "t": PacketType.REJECT, "reason": "in-progress"
+            })
+            return
+        with self._clients_lock:
+            if len(self._clients) >= self._max_clients:
+                self._reliable.send_reliable(addr, {
+                    "t": PacketType.REJECT, "reason": "full"
+                })
+                return
+            # Allow re-join from the same address (idempotent)
+            existing_id = self._addr_to_id.get(addr)
+            if existing_id is None:
+                client_id = secrets.token_urlsafe(16)
+                ghost = GHOST_ASSIGNMENT_ORDER[len(self._clients)]
+                self._clients[client_id] = {
+                    "addr": addr,
+                    "username": packet.get("username", "") or "",
+                    "ghost": ghost,
+                    "last_seen": time.monotonic(),
+                }
+                self._addr_to_id[addr] = client_id
+            else:
+                client_id = existing_id
+                ghost = self._clients[client_id]["ghost"]
+        self._reliable.send_reliable(addr, {
+            "t": PacketType.WELCOME,
+            "clientId": client_id,
+            "mazeString": self._maze_string,
+            "playerSlots": self._max_clients,
+            "ghostAssignment": ghost,
+        })
 
     def debug_packet_count(self):
         with self._packet_count_lock:
