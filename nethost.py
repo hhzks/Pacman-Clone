@@ -75,7 +75,12 @@ class HostSession:
             except socket.timeout:
                 self._reliable.tick()
                 continue
-            except OSError:
+            except OSError as exc:
+                # 10054 = WSAECONNRESET: Windows sends this when an ICMP
+                # "port unreachable" is received (e.g. after sending to a
+                # client whose socket was closed).  It is safe to continue.
+                if getattr(exc, "winerror", None) == 10054:
+                    continue
                 return
             packet = decode(data)
             if packet is None:
@@ -113,6 +118,27 @@ class HostSession:
             addrs = [info["addr"] for info in self._clients.values()]
         for addr in addrs:
             self._reliable.send_reliable(addr, dict(payload))
+
+    def start_match(self, fps, level, rng_seed):
+        """Broadcast START, flip the in-progress flag."""
+        with self._clients_lock:
+            if self._game_started:
+                return
+            self._game_started = True
+            addrs = [info["addr"] for info in self._clients.values()]
+        payload = {
+            "t": PacketType.START,
+            "fps": fps,
+            "level": level,
+            "rngSeed": rng_seed,
+            "mazeString": self._maze_string,
+            "startTick": int(time.monotonic() * 1000),
+        }
+        for addr in addrs:
+            self._reliable.send_reliable(addr, dict(payload))
+
+    def is_game_started(self):
+        return self._game_started
 
     def _handle_hello(self, addr, packet):
         if packet.get("protoVersion") != PROTO_VERSION:
