@@ -178,6 +178,72 @@ def startHostingFromMenu():
 hostsetupmenu.add.button("Start hosting", startHostingFromMenu)
 
 
+def runHostLobbyLoop(session, max_clients, maze_string):
+    """Custom pygame loop: shows host lobby with live roster, until
+    host clicks Start Match, Cancel, or closes the window."""
+    import pygame as _pygame
+    _pygame.init()
+    lobby_surface = _pygame.display.set_mode((720, 960))
+    font = _pygame.font.SysFont("Jokerman", 24)
+    clock = _pygame.time.Clock()
+
+    state = {"start": False, "cancel": False}
+
+    def _on_start():
+        state["start"] = True
+
+    def _on_cancel():
+        state["cancel"] = True
+
+    lobbymenu = pygame_menu.Menu("Host Lobby", 720, 960,
+                                 theme=themes.THEME_SOLARIZED)
+    lobbymenu.add.label(f"Your IP: {_get_lan_ip()}:{session.port}")
+    roster_label = lobbymenu.add.label("Waiting for players...",
+                                       label_id="roster")
+    start_button = lobbymenu.add.button("Start Match", _on_start)
+    lobbymenu.add.button("Cancel", _on_cancel)
+
+    running = True
+    last_refresh = 0.0
+    while running:
+        events = _pygame.event.get()
+        for event in events:
+            if event.type == _pygame.QUIT:
+                running = False
+
+        now = _pygame.time.get_ticks() / 1000.0
+        if now - last_refresh > 0.2:
+            last_refresh = now
+            roster = session.get_roster()
+            lines = ["You: Pac-Man"]
+            for r in roster:
+                uname = r["username"] if r["username"] else "(guest)"
+                lines.append(f"{uname}: {r['ghost']}")
+            roster_label.set_title(" | ".join(lines))
+            session.check_timeouts()
+
+        if state["start"] or state["cancel"]:
+            running = False
+
+        lobbymenu.update(events)
+        lobbymenu.draw(lobby_surface)
+        _pygame.display.update()
+        clock.tick(60)
+
+    if state["start"]:
+        # Hand off to runHostedGame (reuses the session; do NOT close here)
+        max_players = max_clients  # for clarity
+        roster = session.get_roster()
+        names = [users[0]] + [r["username"] for r in roster]
+        while len(names) < 5:
+            names.append("")
+        import random
+        session.start_match(fps=60, level=1, rng_seed=random.randint(0, 99999))
+        netgame.runHostedGame(max_players, names, maze_string, session)
+
+    session.stop()
+
+
 #################MAZECHOICE(GAME) BLOCK###########################################################################
 
 def playGame(names):
