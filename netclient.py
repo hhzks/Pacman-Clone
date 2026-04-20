@@ -31,6 +31,7 @@ class ClientSession:
         self.prev_state = None
         self.latest_state_arrived_at = 0.0
         self.prev_state_arrived_at = 0.0
+        self._input_seq = 0
 
     def _raw_send(self, addr, packet):
         try:
@@ -55,6 +56,12 @@ class ClientSession:
                 return
             packet = decode(data)
             if packet is None:
+                continue
+            # STATE packets are unreliable game snapshots; bypass seq dedup so
+            # the game-level "s" field is preserved and no spurious ACKs are sent.
+            if packet.get("t") == PacketType.STATE:
+                with self._inbox_lock:
+                    self._inbox.append(packet)
                 continue
             processed = self._reliable.handle_incoming(addr, packet)
             if processed is None:
@@ -86,6 +93,26 @@ class ClientSession:
                 self.events.append(pkt)
             elif t == PacketType.BYE:
                 self.events.append({"t": PacketType.BYE})
+            elif t == PacketType.STATE:
+                # Discard out-of-order
+                from netcommon import seq_newer
+                if (self.latest_state is None
+                        or seq_newer(pkt["s"], self.latest_state["s"])):
+                    self.prev_state = self.latest_state
+                    self.prev_state_arrived_at = self.latest_state_arrived_at
+                    self.latest_state = pkt
+                    self.latest_state_arrived_at = time.monotonic()
+
+    def send_input(self, direction):
+        if self.client_id is None:
+            return
+        self._input_seq += 1
+        self._reliable.send_unreliable(self._host_addr, {
+            "t": PacketType.INPUT,
+            "clientId": self.client_id,
+            "dir": direction,
+            "inputSeq": self._input_seq,
+        })
 
     def send_bye(self):
         if self.client_id is not None:

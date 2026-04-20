@@ -247,6 +247,20 @@ class HostSession:
         if broadcast_needed:
             self._broadcast_lobby()
 
+    def broadcast_state(self, snapshot_packet):
+        """Fire-and-forget STATE broadcast to every client."""
+        with self._clients_lock:
+            addrs = [info["addr"] for info in self._clients.values()]
+        for addr in addrs:
+            self._raw_send(addr, dict(snapshot_packet))
+
+    def broadcast_event(self, event_packet):
+        """Reliable broadcast for EVENT packets."""
+        with self._clients_lock:
+            addrs = [info["addr"] for info in self._clients.values()]
+        for addr in addrs:
+            self._reliable.send_reliable(addr, dict(event_packet))
+
     def debug_packet_count(self):
         with self._packet_count_lock:
             return self._packet_count
