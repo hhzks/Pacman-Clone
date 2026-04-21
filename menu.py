@@ -18,6 +18,9 @@ import netupnp
 import boards as _boards
 from netcommon import DEFAULT_PORT
 
+if not os.path.isdir("replays"):
+    os.makedirs("replays")
+
 pygame.init()
 surface = pygame.display.set_mode((720, 960))
 pygame.display.set_caption('PAC-MAN')
