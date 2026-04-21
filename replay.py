@@ -9,9 +9,7 @@ import time
 
 def updateQueue(queue, file):
     for x in file:
-        queue.enqueue(x[:-1].split("@"))
-        while queue.isFull():
-            time.sleep(0.001)
+        queue.appendleft(x[:-1].split("@"))
     print("Fully loaded!")
 
 
