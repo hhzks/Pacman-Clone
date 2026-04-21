@@ -3,7 +3,7 @@ import threading
 import time
 
 from netcommon import (encode, decode, ReliableChannel, PacketType,
-                       PROTO_VERSION)
+                       PROTO_VERSION, PING_INTERVAL_S)
 
 
 class ClientSession:
@@ -22,6 +22,7 @@ class ClientSession:
         self._maze_string = None
         self._thread = None
         self._running = False
+        
         self._inbox = []  # list of decoded packets for the main thread
         self._inbox_lock = threading.Lock()
         self.start_info = None  # set once START arrives
@@ -32,6 +33,7 @@ class ClientSession:
         self.latest_state_arrived_at = 0.0
         self.prev_state_arrived_at = 0.0
         self._input_seq = 0
+        self._last_ping = 0.0
 
     def _raw_send(self, addr, packet):
         try:
@@ -80,9 +82,18 @@ class ClientSession:
             self._thread.join(timeout=1.0)
         self._sock.close()
 
+    def _maybe_send_ping(self):
+        now = time.monotonic()
+        if self.client_id is not None and now - self._last_ping >= PING_INTERVAL_S:
+            self._last_ping = now
+            self._reliable.send_unreliable(self._host_addr, {
+                "t": PacketType.PING, "clientId": self.client_id,
+            })
+
     def poll(self):
         """Drain the inbox and update self.start_info / self.lobby_roster
         / self.events. Call each frame from the main thread."""
+        self._maybe_send_ping()
         for pkt in self.drain_inbox():
             t = pkt.get("t")
             if t == PacketType.START:
