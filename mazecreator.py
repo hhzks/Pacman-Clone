@@ -248,7 +248,3 @@ def main(username):
             except:
                 messagebox.showerror("Error", "Error occurred, could not store maze")
             leaderboard.close()
-
-
-if __name__ == "__main__":
-    main("")

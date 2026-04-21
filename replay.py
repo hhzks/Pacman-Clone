@@ -107,7 +107,3 @@ def replay(file):
                 return
         clock.tick(FPS)
         dt = clock.tick(FPS) / 1000
-
-
-if __name__ == "__main__":
-    replay("replays/25b635c7c9cf9a3aa92bca09c2bde9f6a74871c7f300a0fbd38e42ba37cac9d3")

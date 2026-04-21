@@ -123,7 +123,3 @@ def openTab(user):
     accountManager = AccountManager(user)
     accountManager.main()
     return accountManager.getUser()
-
-
-if __name__ == "__main__":
-    openTab("")

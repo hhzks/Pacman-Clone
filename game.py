@@ -913,8 +913,3 @@ def runGame(players, names, mazeString):
         leaderboard.addReplay(matchID, h.hexdigest())
 
     leaderboard.close()
-
-########################################################################################################################
-
-if __name__ == "__main__":
-    runGame(0, ["","","","",""], boards.encodeMaze(boards.boardsdict["default"]))
