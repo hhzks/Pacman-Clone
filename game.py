@@ -496,6 +496,17 @@ class GhostGroup:
         for entity in ghosts:
             self.__ghosts.append(entity)
 
+    def __iter__(self):
+        self.__iterIdx = -1
+        return self
+    
+    def __next__(self):
+        if self.__iterIdx == len(self.__ghosts) - 1:
+            raise StopIteration
+        else:
+            self.__iterIdx += 1
+            return self.__ghosts[self.__iterIdx]
+
     def normalGhostCollision(self, boundBox):
         for ghost in self.__ghosts:
             if boundBox.colliderect(ghost.getBoundBox()):
@@ -872,10 +883,8 @@ def runGame(players, names, mazeString):
         pygame.display.flip()
         if RECORDGAME :
             replayFile.write(f'{pacman.getClass(), pacman.getPosition()} @{game.getTime()}\n')
-            replayFile.write(f'{blinky.getClass(), blinky.getPosition()} @{game.getTime()}\n')
-            replayFile.write(f'{inky.getClass(), inky.getPosition()} @{game.getTime()}\n')
-            replayFile.write(f'{pinky.getClass(), pinky.getPosition()} @{game.getTime()}\n')
-            replayFile.write(f'{clyde.getClass(), clyde.getPosition()} @{game.getTime()}\n')
+            for ghost in ghosts:
+                replayFile.write(f'{ghost.getClass(), ghost.getPosition()} @{game.getTime()}\n')
 
 
         clock.tick(FPS)
