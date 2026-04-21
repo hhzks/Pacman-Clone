@@ -1,5 +1,5 @@
 from game import Game, Board, Pacman, Blinky, Inky, Pinky, Clyde, GhostGroup
-from structures import Queue
+from collections import deque
 from tkinter import messagebox
 import pygame
 import threading
@@ -56,14 +56,14 @@ def replay(file):
     FPS = int(replayFile.readline()[:-1])
     boardString = replayFile.readline()[:-1]
     board = Board(boardString)
-    positionQueue = Queue(120)
+    positionQueue = deque()
     queueThread = threading.Thread(target=updateQueue, daemon=True, args=(positionQueue, replayFile))
     queueThread.start()
 
     clock = pygame.time.Clock()
     game = Game(-1, LEVEL, board, ghosts, pacman)
 
-    queueItem = positionQueue.dequeue()  # loads the first queue item in
+    queueItem = positionQueue.pop()  # loads the first queue item in
     while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -101,7 +101,7 @@ def replay(file):
                 positionObject[2].strip(">)")))  # returns position vector from file in form (x, y)
             item.setPosition(newPosition)
             try:
-                queueItem = positionQueue.dequeue()
+                queueItem = positionQueue.pop()
             except:
                 messagebox.showinfo("Info", "End of Replay!")
                 return

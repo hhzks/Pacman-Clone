@@ -4,14 +4,13 @@ import pygame
 import boards
 from database import Leaderboard
 from game import Board, Square
-from structures import Stack, Queue
-
+from collections import deque
 
 class Creator(Board):
     def __init__(self, board):
         Board.__init__(self, board)
-        self.__UndoStack = Stack(10)
-        self.__RedoStack = Stack(10)
+        self.__UndoStack = deque()
+        self.__RedoStack = deque()
         self.__occupiedCells = [(14, 24), (16, 16), (16, 14), (13, 16), (13, 14)]
         self.__blankBoard = boards.boardsdict["blank"]
 
@@ -145,18 +144,18 @@ class Creator(Board):
         # BFS to check if all pellets can be accessed
         visitedList = []
         startPosition = (14, 24)  # This is where the player always begins
-        searchQueue = Queue(86400)
-        searchQueue.enqueue(startPosition)
+        searchQueue = deque()
+        searchQueue.appendleft(startPosition)
         validMoves = [(1, 0), (0, 1), (-1, 0), (0, -1)]
         while not (searchQueue.isEmpty()):  # keep on going until queue is empty (no more new nodes to discover)
-            currentNode = searchQueue.dequeue()
+            currentNode = searchQueue.pop()
             visitedList.append(currentNode)
             addTuples = lambda tuple, tuplesList: [((tuple[0] + i[0]) % 30, (tuple[1] + i[1]) % 33) for i in
                                                    tuplesList]  # map current node onto allowed movement vectors
             currentNeighbours = addTuples(currentNode, validMoves)
             for node in currentNeighbours:
                 if (not (node in wallCoords)) and (not (node in visitedList)):
-                    searchQueue.enqueue(node)
+                    searchQueue.appendleft(node)
                     visitedList.append(node)
                     if node in pelletCoords:
                         pelletCoords.remove(node)
