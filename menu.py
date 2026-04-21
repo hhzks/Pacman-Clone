@@ -181,6 +181,7 @@ def startHostingFromMenu():
     try:
         runHostLobbyLoop(session, max_clients, maze_string, upnp)
     finally:
+        session.stop()
         upnp.stop()
 
 
@@ -253,8 +254,6 @@ def runHostLobbyLoop(session, max_clients, maze_string, upnp=None):
         session.start_match(fps=60, level=1, rng_seed=random.randint(0, 99999))
         netgame.runHostedGame(max_players, names, maze_string, session)
 
-    session.stop()
-
 
 joinsetupmenu = pygame_menu.Menu("Join Game", 720, 960,
                                  theme=themes.THEME_SOLARIZED)
@@ -280,7 +279,10 @@ def joinFromMenu():
         joinStatusLabel.set_title(f"Join failed: {reason}")
         client.close()
         return
-    runClientLobbyLoop(client, info)
+    try:
+        runClientLobbyLoop(client, info)
+    finally:
+        client.close()
 
 
 joinsetupmenu.add.button("Connect", joinFromMenu)
@@ -336,7 +338,6 @@ def runClientLobbyLoop(client, welcome_info):
         netgame.runClientGame(client, welcome_info["mazeString"])
     else:
         client.send_bye()
-        client.close()
 
 
 #################MAZECHOICE(GAME) BLOCK###########################################################################
