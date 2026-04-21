@@ -106,6 +106,7 @@ def runHostedGame(players, names, mazeString, host_session):
 
         if "level-complete" in events:
             game.loadNextLevel()
+            current_pellets_set = set(range(len(board._Board__ogPelletPositions)))
         if "game-over" in events:
             running = False
 
@@ -218,9 +219,11 @@ def runClientGame(client_session, mazeString):
             for idx in client_session.latest_state.get("pelletDelta", []):
                 pellets_present.discard(idx)
 
-        # Handle events (game-over, BYE)
+        # Handle events (game-over, BYE, level-complete)
         for e in client_session.events:
             ev = e.get("event") if e.get("t") == PacketType.EVENT else None
+            if ev == "level-complete":
+                pellets_present = set(range(len(board._Board__ogPelletPositions)))
             if ev == "game-over" or e.get("t") == PacketType.BYE:
                 running = False
         client_session.events = []
