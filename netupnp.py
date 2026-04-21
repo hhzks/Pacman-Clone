@@ -90,10 +90,12 @@ class UpnpMapper:
             ext = self.external_ip
             err = self.error
             port = self._port
-        if status == self.STATUS_MAPPED:
-            return f"Online: ready  (public {ext}:{port})"
-        if status == self.STATUS_DISCOVERING:
-            return "Online: setting up (UPnP)..."
-        if status == self.STATUS_UNAVAILABLE:
-            return f"Online: forward UDP port {port} manually ({err})"
-        return ""
+        match status:
+            case self.STATUS_MAPPED:
+                return f"Online: ready  (public {ext}:{port})"
+            case self.STATUS_DISCOVERING:
+                return "Online: setting up (UPnP)..."
+            case self.STATUS_UNAVAILABLE:
+                return f"Online: forward UDP port {port} manually ({err})"
+            case _:
+                return ""
