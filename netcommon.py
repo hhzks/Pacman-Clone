@@ -195,7 +195,7 @@ def buildSnapshot(tick, seq, game, board, pacman, ghosts,
                 "scared": g.isScared(),
                 "dead": g.isDead(),
             }
-            for g in ghosts.getGhosts()
+            for g in ghosts
         ],
         "score": game.getScore(),
         "lives": game.getLives(),

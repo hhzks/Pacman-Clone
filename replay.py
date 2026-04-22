@@ -74,7 +74,7 @@ def replay(file):
 
         game.updateScore()
 
-        for ghost in ghosts.getGhosts():
+        for ghost in ghosts:
             if pacmanBox.colliderect(ghost.getBoundBox()):
                 if ghost.isScared():
                     ghost.killGhost()

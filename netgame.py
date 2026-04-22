@@ -96,9 +96,9 @@ def runHostedGame(players, names, mazeString, host_session):
                     ghost_ownership.pop(idx, None)
                     # Move ghost from PlayerGhosts to Bots so CPU drives it
                     g = player_ghosts[idx]
-                    if g in playerGhosts.getGhosts():
-                        playerGhosts.getGhosts().remove(g)
-                        botGhosts.getGhosts().append(g)
+                    if g in playerGhosts:
+                        playerGhosts.remove(g)
+                        botGhosts.add(g)
 
         inputProvider.refresh(pygame.key.get_pressed())
         events = stepSimulation(game, movement, pacman, ghosts,
@@ -147,7 +147,7 @@ def runHostedGame(players, names, mazeString, host_session):
                            leaderboard.getMazeName(mazeString))
     matchID = leaderboard.getMatchID()
     leaderboard.addToMatchBook(names[0], matchID, pacman.getName())
-    for i, ghost in enumerate(ghosts.getGhosts()):
+    for i, ghost in enumerate(ghosts):
         if ghost in player_ghosts:
             idx = player_ghosts.index(ghost)
             leaderboard.addToMatchBook(
