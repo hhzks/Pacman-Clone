@@ -884,9 +884,9 @@ def runGame(players, names, mazeString):
         game.render(screen, dt)
         pygame.display.flip()
         if RECORDGAME :
-            replayFile.write(f'{pacman.getClass(), pacman.getPosition()} @{game.getTime()}\n')
+            replayFile.write(f'{pacman.getName(), pacman.getPosition()} @{game.getTime()}\n')
             for ghost in ghosts:
-                replayFile.write(f'{ghost.getClass(), ghost.getPosition()} @{game.getTime()}\n')
+                replayFile.write(f'{ghost.getName(), ghost.getPosition()} @{game.getTime()}\n')
 
 
         clock.tick(FPS)
