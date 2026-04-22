@@ -197,7 +197,7 @@ class Game:
         self.__time = pygame.time.get_ticks() - self.__originalTime
         self._board.render(screen)
         self.__pacman.render(screen, dt)
-        for ghost in self.__ghosts.getGhosts():
+        for ghost in self.__ghosts:
             ghost.render(screen, dt)
 
         self.drawValue("Score", self.__score, (0, 800), screen)
@@ -496,6 +496,26 @@ class GhostGroup:
         for entity in ghosts:
             self.__ghosts.append(entity)
 
+    def __iter__(self):
+        self.__iterIdx = -1
+        return self
+    
+    def __next__(self):
+        if self.__iterIdx == len(self.__ghosts) - 1:
+            raise StopIteration
+        else:
+            self.__iterIdx += 1
+            return self.__ghosts[self.__iterIdx]
+    
+    def __getitem__(self, ghost):
+        return self.__ghosts.index(ghost)
+    
+    def remove(self, ghost):
+        self.__ghosts.remove(ghost)
+    
+    def add(self, ghost):
+        self.__ghosts.append(ghost)
+
     def normalGhostCollision(self, boundBox):
         for ghost in self.__ghosts:
             if boundBox.colliderect(ghost.getBoundBox()):
@@ -525,12 +545,6 @@ class GhostGroup:
         for ghost in self.__ghosts:
             if ghost.isScared():
                 return True
-
-    def getGhosts(self):
-        return self.__ghosts
-
-    def getIndex(self, ghost):
-        return self.__ghosts.index(ghost)
 
     def render(self, screen, dt):
         for ghost in self.__ghosts:
@@ -644,13 +658,12 @@ def stepSimulation(game, movement, pacman, ghosts, playerGhosts, botGhosts,
     events = []
 
     # Move player-controlled ghosts
-    playerGhostList = playerGhosts.getGhosts()
-    for ghost in ghosts.getGhosts():
-        if ghost in playerGhostList:
-            idx = playerGhostList.index(ghost)
+    for ghost in ghosts:
+        if ghost in playerGhosts:
+            idx = playerGhosts[ghost]
             direction = inputProvider.directionFor(ghost, ghostIndex=idx)
             movement.movePlayerWithDirection(ghost, direction)
-        elif ghost in botGhosts.getGhosts():
+        elif ghost in botGhosts:
             movement.moveCPU(ghost)
 
     # Move Pac-Man
@@ -666,7 +679,7 @@ def stepSimulation(game, movement, pacman, ghosts, playerGhosts, botGhosts,
     # Ghost collisions (combo within a single tick)
     pacmanBox = pacman.getBoundBox()
     eaten_this_tick = 0
-    for ghost in ghosts.getGhosts():
+    for ghost in ghosts:
         if pacmanBox.colliderect(ghost.getBoundBox()):
             if ghost.isScared():
                 ghost.killGhost()
@@ -872,10 +885,8 @@ def runGame(players, names, mazeString):
         pygame.display.flip()
         if RECORDGAME :
             replayFile.write(f'{pacman.getClass(), pacman.getPosition()} @{game.getTime()}\n')
-            replayFile.write(f'{blinky.getClass(), blinky.getPosition()} @{game.getTime()}\n')
-            replayFile.write(f'{inky.getClass(), inky.getPosition()} @{game.getTime()}\n')
-            replayFile.write(f'{pinky.getClass(), pinky.getPosition()} @{game.getTime()}\n')
-            replayFile.write(f'{clyde.getClass(), clyde.getPosition()} @{game.getTime()}\n')
+            for ghost in ghosts:
+                replayFile.write(f'{ghost.getClass(), ghost.getPosition()} @{game.getTime()}\n')
 
 
         clock.tick(FPS)
@@ -891,9 +902,9 @@ def runGame(players, names, mazeString):
     leaderboard.addToMatchBook(names[0], matchID, pacman.getName())
 
 
-    for ghost in ghosts.getGhosts():
+    for ghost in ghosts:
         names = names[1:]
-        if ghost in playerGhosts.getGhosts():
+        if ghost in playerGhosts:
             leaderboard.addToMatchBook(names[0], matchID, ghost.getName())
 
 

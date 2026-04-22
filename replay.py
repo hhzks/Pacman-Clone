@@ -9,9 +9,7 @@ import time
 
 def updateQueue(queue, file):
     for x in file:
-        queue.enqueue(x[:-1].split("@"))
-        while queue.isFull():
-            time.sleep(0.001)
+        queue.appendleft(x[:-1].split("@"))
     print("Fully loaded!")
 
 
@@ -76,7 +74,7 @@ def replay(file):
 
         game.updateScore()
 
-        for ghost in ghosts.getGhosts():
+        for ghost in ghosts:
             if pacmanBox.colliderect(ghost.getBoundBox()):
                 if ghost.isScared():
                     ghost.killGhost()

@@ -1,5 +1,10 @@
 import configparser
 import os
+import sys
+
+if getattr(sys, 'frozen', False):
+    os.chdir(os.path.join(sys._MEIPASS))
+
 import pygame
 import pygame_menu
 from pygame_menu import themes
