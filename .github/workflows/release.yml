@@ -1,0 +1,77 @@
+name: Build and Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. v1.0.0)"
+        required: true
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            artifact: Bacman-Windows
+            zip_cmd: powershell -Command "Compress-Archive -Path dist/Bacman -DestinationPath Bacman-Windows.zip"
+          - os: macos-latest
+            artifact: Bacman-macOS
+            zip_cmd: cd dist && zip -r ../Bacman-macOS.zip Bacman
+          - os: ubuntu-latest
+            artifact: Bacman-Linux
+            zip_cmd: cd dist && zip -r ../Bacman-Linux.zip Bacman
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install pyinstaller
+          pip install pygame>=2.5 pygame-menu>=4.4 miniupnpc>=2.2
+
+      - name: Build executable
+        run: |
+          pyinstaller --noconfirm --name Bacman --windowed --add-data "images:images" --add-data "config.ini:." --icon images/icon.jpg menu.py
+
+      - name: Zip output
+        run: ${{ matrix.zip_cmd }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}.zip
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag }}
+          name: Bacman ${{ github.event.inputs.tag }}
+          body: |
+            Download the zip for your platform, extract it, and run the Bacman executable.
+
+            - **Windows**: `Bacman.exe`
+            - **macOS**: `Bacman` (you may need to allow it in System Settings > Privacy & Security)
+            - **Linux**: `./Bacman`
+          files: |
+            artifacts/Bacman-Windows/Bacman-Windows.zip
+            artifacts/Bacman-macOS/Bacman-macOS.zip
+            artifacts/Bacman-Linux/Bacman-Linux.zip

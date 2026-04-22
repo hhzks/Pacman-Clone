@@ -13,7 +13,11 @@ A recreation of PAC-MAN built with Python and Pygame, developed as an A-Level Co
 
 ## Download
 
-Download the latest [Bacman.zip from Releases](https://github.com/hhzks/Bacman/releases/latest), extract the zip, and run `Bacman.exe`.
+Download the zip for your platform from the [latest release](https://github.com/hhzks/Bacman/releases/latest), extract it, and run the executable:
+
+- **Windows** — `Bacman.exe`
+- **macOS** — `Bacman` (you may need to allow it in System Settings > Privacy & Security)
+- **Linux** — `./Bacman`
 
 ## Requirements
 
