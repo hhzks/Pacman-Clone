@@ -11,6 +11,10 @@ A recreation of PAC-MAN built with Python and Pygame, developed as an A-Level Co
 - **Leaderboard** — local account registry with match history
 - **Configurable controls and performance settings** via `config.ini`
 
+## Download
+
+Download the latest [Bacman.zip from Releases](https://github.com/hhzks/Bacman/releases/latest), extract the zip, and run `Bacman.exe`.
+
 ## Requirements
 
 - Python 3.12+
