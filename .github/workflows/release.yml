@@ -10,6 +10,7 @@ on:
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: windows-latest
@@ -33,8 +34,12 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install pyinstaller
+          pip install pyinstaller pillow
           pip install pygame>=2.5 pygame-menu>=4.4 miniupnpc>=2.2
+
+      - name: Install Linux display dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y xvfb
 
       - name: Build executable
         run: |
