@@ -35,10 +35,20 @@ class FakeGhost:
 
 
 class FakeGhostGroup:
+    
     def __init__(self, ghosts):
-        self._ghosts = ghosts
-    def getGhosts(self):
-        return self._ghosts
+        self.__ghosts = []
+
+    def __iter__(self):
+        self.__iterIdx = -1
+        return self
+    
+    def __next__(self):
+        if self.__iterIdx == len(self.__ghosts) - 1:
+            raise StopIteration
+        else:
+            self.__iterIdx += 1
+            return self.__ghosts[self.__iterIdx]
 
 
 class FakeGame:
