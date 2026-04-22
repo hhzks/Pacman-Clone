@@ -1,4 +1,4 @@
-# Pacman Clone
+# Bacman
 
 A recreation of PAC-MAN built with Python and Pygame, developed as an A-Level Computer Science non-exam assessment.
 
@@ -31,7 +31,7 @@ Build a standalone Windows executable using [PyInstaller](https://pyinstaller.or
 
 ```bash
 pip install pyinstaller
-pyinstaller Pacman-Clone.spec --noconfirm
+pyinstaller Bacman.spec --noconfirm
 ```
 
-The output is written to `dist/Pacman-Clone/`. Run `Pacman-Clone.exe` from that folder.
+The output is written to `dist/Bacman/`. Run `Bacman.exe` from that folder.

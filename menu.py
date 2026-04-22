@@ -28,7 +28,7 @@ if not os.path.isdir("replays"):
 
 pygame.init()
 surface = pygame.display.set_mode((720, 960))
-pygame.display.set_caption('PAC-MAN')
+pygame.display.set_caption('Bacman')
 icon = pygame.image.load("images/icon.jpg")
 pygame.display.set_icon(icon)
 users = ["", "", "", "", ""]  # 5 players, if not logged in then username set to empty string

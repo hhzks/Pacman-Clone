@@ -14,7 +14,7 @@ class UpnpMapper:
     STATUS_MAPPED = "mapped"
     STATUS_UNAVAILABLE = "unavailable"
 
-    def __init__(self, port, description="Pacman Clone"):
+    def __init__(self, port, description="Bacman"):
         self._port = int(port)
         self._description = description
         self._lock = threading.Lock()
