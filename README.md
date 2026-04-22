@@ -1,5 +1,37 @@
-This is a recreation of PAC-MAN for my A-Level Computer Science Non-exam assessment.
+# Pacman Clone
 
-It contains a replay system and maze creator, along with a local account registry.
+A recreation of PAC-MAN built with Python and Pygame, developed as an A-Level Computer Science non-exam assessment.
 
-Set FPS to something high (around 240+) otherwise collisions might not work correctly.
+## Features
+
+- **Classic Pac-Man gameplay** with ghost AI
+- **Multiplayer** — local (up to 5 players) and online via LAN with UPnP support
+- **Maze creator** — design and play custom mazes
+- **Replay system** — record and replay games
+- **Leaderboard** — local account registry with match history
+- **Configurable controls and performance settings** via `config.ini`
+
+## Requirements
+
+- Python 3.12+
+- Dependencies listed in `requirements.txt`
+
+## Getting Started
+
+```bash
+pip install -r requirements.txt
+python menu.py
+```
+
+Set FPS to 240+ in settings for correct collision detection.
+
+## Packaging
+
+Build a standalone Windows executable using [PyInstaller](https://pyinstaller.org):
+
+```bash
+pip install pyinstaller
+pyinstaller Pacman-Clone.spec --noconfirm
+```
+
+The output is written to `dist/Pacman-Clone/`. Run `Pacman-Clone.exe` from that folder.
