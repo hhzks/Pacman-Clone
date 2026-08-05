@@ -5,19 +5,19 @@ A recreation of PAC-MAN built with Python and Pygame, developed as an A-Level Co
 ## Features
 
 - **Classic Pac-Man gameplay** with ghost AI
-- **Multiplayer** — local (up to 5 players) and online via LAN with UPnP support
-- **Maze creator** — design and play custom mazes
-- **Replay system** — record and replay games
-- **Leaderboard** — local account registry with match history
+- **Multiplayer**: local (up to 5 players) and online via LAN with UPnP support
+- **Maze creator**: design and play custom mazes
+- **Replay system**: record and replay games
+- **Leaderboard**: local account registry with match history
 - **Configurable controls and performance settings** via `config.ini`
 
 ## Download
 
 Download the zip for your platform from the [latest release](https://github.com/hhzks/Bacman/releases/latest), extract it, and run the executable:
 
-- **Windows** — `Bacman.exe`
-- **macOS** — `Bacman` (you may need to allow it in System Settings > Privacy & Security)
-- **Linux** — `./Bacman`
+- **Windows**: `Bacman.exe`
+- **macOS**: `Bacman` (you may need to allow it in System Settings > Privacy & Security)
+- **Linux**: `./Bacman`
 
 ## Requirements
 
